@@ -14,7 +14,7 @@ import tenseal as ts  # <-- 使用 TenSEAL 代替 Pyfhel
 # ========== 全局 TenSEAL context（构造后赋值） ==========
 TENSEAL_CONTEXT = None
 
-# 数据集（保持不变）
+# 数据集
 def get_dataloaders(data_flag, batch_size=128, download=True):
     info = INFO[data_flag]
     DataClass = getattr(medmnist, info['python_class'])
@@ -47,7 +47,7 @@ def get_dataloaders(data_flag, batch_size=128, download=True):
 
 
 # ---------------------
-# TenSEAL 相关的编码/加解密工具（权重不再加密）
+# TenSEAL 相关的编码/加解密工具
 # ---------------------
 
 def encode_matrix(HE, matrix):
@@ -65,7 +65,7 @@ def encode_matrix(HE, matrix):
 
 def encrypt_matrix(ctx, matrix):
     """
-    对输入（如图片）做加密。保持与原来代码的数据结构类似：
+    对输入（如图片）做加密。
     - 如果是标量 -> 使用单槽 CKKS 向量 ts.ckks_vector(ctx, [val])
     - 如果是多维数组 -> 递归处理，返回嵌套列表/ndarray 结构，其叶子是 ckks_vector
     """
@@ -124,6 +124,7 @@ class HeReLu:
 def quadratic_poly(ctx, image):
     """
     使用二次多项式 0.25x^2 + 0.5x + 0.25 拟合 ReLU
+    采用horner式计算
     对 leaf 为 ckks_vector 的结构进行运算：
     对单个 ckks_vector x:
         x * x -> ckks_vector (elementwise)
@@ -370,7 +371,7 @@ class HeBasicBlock:
                     tmp_conv.bias.data.copy_(conv_ds.bias.data)
                 self.shortcut_layer = tmp_conv
 
-        # 主路径 - 两个卷积层（注意：这里将 conv 的参数以明文 numpy array 传入 ConvolutionalLayer）
+        # 主路径 - 两个卷积层
         conv1_bias = None if self.conv1.bias is None else self.conv1.bias.detach().cpu().numpy()
         self.conv1 = ConvolutionalLayer(ctx, weights=self.conv1.weight.detach().cpu().numpy(),
                                         stride=self.conv1.stride,
@@ -517,14 +518,13 @@ def main():
     global TENSEAL_CONTEXT
     bits_scale = 25
     # TenSEAL 上下文初始化（CKKS）
-    # 参数保留你原来的规模，若需要可以调小以提升速度
     poly_mod_degree = 2**14
     coeff_mod_bit_sizes = [40] + [bits_scale]*4 + [40] 
     ctx = ts.context(ts.SCHEME_TYPE.CKKS, poly_mod_degree, -1,
     coeff_mod_bit_sizes=coeff_mod_bit_sizes)
     ctx.generate_galois_keys()
     ctx.generate_relin_keys()
-    ctx.global_scale = 2**20 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 调低 scale
+    ctx.global_scale = 2**20
     # 为了本地可解密，我们在 context 中保留 secret key（TenSEAL 默认在创建时包含 secret key）
     TENSEAL_CONTEXT = ctx
     print("TenSEAL 上下文生成完成！")
@@ -581,3 +581,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
