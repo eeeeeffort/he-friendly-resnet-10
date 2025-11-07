@@ -135,11 +135,13 @@ def main():
     res = HE.encryptFrac(res)
     for oc in range(c_out):
         for i, mask in enumerate(masks_list[oc]):
+            # 提取对应mask进行卷积
             img_ctx_dot = img_ctx.copy()
             mask = HE.encodeFrac(mask)
             mul = HE.multiply_plain(img_ctx_dot, mask)
             HE.rescale_to_next(mul)
 
+            # 将卷积结果求和得到对应输出位结果
             stride = in_len // 2
             mul_dot = mul.copy()
             while stride >= 1:
@@ -148,6 +150,7 @@ def main():
                 mul_dot = mul.copy()
                 stride = stride // 2
 
+            # 将多通道的输出求和得到当前卷积核对应输出通道的结果并将该结果添加到最终输出的相应位置
             tmp = mul.copy()
             for j in range(img_shape[0]-1):
                 HE.rotate(tmp, in_len)
@@ -162,8 +165,10 @@ def main():
     res_matrix = np.array(res[:c_out*out_len]).reshape(c_out,out_W,out_H)
     print("密文卷积结果：")
     print(res_matrix)
+    # 输出明文卷积结果进行比较
     print_simple_results(img, kernels, stride=1)
 
 
 if __name__ == '__main__':
     main()
+
