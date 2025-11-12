@@ -107,29 +107,31 @@ def pad_ciphertext_ckks_pyfhel(HE: Pyfhel, ct_x: PyCtxt, C: int, H: int, W: int,
         # explicitly before calling this function. We continue assuming keys exist.
         pass
     # For each channel and each (i,j) copy the single value into the correct output slot
+    # 逐行处理优化版本
     for c in range(C):
         for i in range(H):
-            for j in range(W):
-                idx_in = c * (H * W) + i * W + j
-                idx_out = c * (Hp * Wp) + (i + pad) * Wp + (j + pad)
-                ct_x1 = ct_x.copy()
-                # 1) rotate to bring desired input element to slot 0
-                HE.rotate(ct_x1, idx_in)
+            # 计算当前行在输入和输出中的起始索引
+            row_start_in = c * (H * W) + i * W
+            row_start_out = c * (Hp * Wp) + (i + pad) * Wp + pad
 
-                # 2) multiply_plain by mask that keeps only slot 0
-                if p_mask_slot0.mod_level != ct_x1.mod_level:
-                    HE.mod_switch_to_next(p_mask_slot0)
-                HE.multiply_plain(ct_x1, p_mask_slot0)
-                HE.rescale_to_next(ct_x1)
+            # 复制输入密文并旋转，使目标行的第一个元素到达槽位0
+            ct_x1 = ct_x.copy()
+            HE.rotate(ct_x1, row_start_in)
 
-                # 3) rotate to destination slot
-                HE.rotate(ct_x1, -idx_out)
+            # 应用行掩码，提取整行像素
+            if p_mask_slot0.mod_level != ct_x1.mod_level:
+                HE.mod_switch_to_next(p_mask_slot0)
+            HE.multiply_plain(ct_x1, p_mask_slot0)
+            HE.rescale_to_next(ct_x1)
 
-                # 4) add into accumulator
-                if ct_acc.mod_level != ct_x1.mod_level:
-                    HE.mod_switch_to_next(ct_acc)
-                ct_acc.scale = ct_x1.scale
-                ct_acc = HE.add(ct_acc, ct_x1)
+            # 旋转到目标行位置
+            HE.rotate(ct_x1, -row_start_out)
+
+            # 添加到累加器
+            if ct_acc.mod_level != ct_x1.mod_level:
+                HE.mod_switch_to_next(ct_acc)
+            ct_acc.scale = ct_x1.scale
+            ct_acc = HE.add(ct_acc, ct_x1)
 
     return ct_acc
 
@@ -189,3 +191,4 @@ if __name__ == '__main__':
 # - scale = 2**30..2**40 depending on multiplicative depth required later
 # - qi_sizes: choose a decomposition that supports your multiplicative depth and
 #   keeps performance reasonable; e.g. [60] + [30]*k + [60]
+
